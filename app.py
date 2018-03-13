@@ -5,6 +5,7 @@ import datetime
 from flask import g
 from wtforms import Form, StringField, TextAreaField, PasswordField, validators
 from passlib.hash import sha256_crypt
+from functools import wraps
 
 app = Flask(__name__)
 
@@ -117,6 +118,17 @@ def login():
 
     return render_template('login.html')
 
+# Check if user logged in.  Stop unauthorized access to Dashboard
+def is_logged_in(f):
+    @wraps(f)
+    def wrap(*args, **kwargs):
+        if 'logged_in' in session:
+            return f(*args, **kwargs)
+        else:
+            flash('Unauthorized, Please login', 'danger')
+            return redirect(url_for('login'))
+    return wrap
+
 # Logout
 @app.route('/logout')
 def logout():
@@ -127,6 +139,7 @@ def logout():
 
 # Dashboard
 @app.route('/dashboard')
+@is_logged_in
 def dashboard():
     return render_template('dashboard.html')
 
