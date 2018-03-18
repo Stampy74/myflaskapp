@@ -1,5 +1,5 @@
 from flask import Flask, render_template, flash, redirect, url_for, session, request, logging
-from data import Articles
+#from data import Articles  # Now using the database
 import sqlite3
 import datetime
 from flask import g
@@ -11,7 +11,8 @@ app = Flask(__name__)
 
 # Config SQLITE 3
 DATABASE = 'myflaskapp.db'
-Articles = Articles()
+# Demo article data
+#  Articles = Articles()  # Now using the database
 
 # Page Routing
 
@@ -28,12 +29,42 @@ def about():
 # All Articles
 @app.route('/articles')
 def articles():
-    return render_template('articles.html', articles = Articles)
+    # Create Cursor
+    connection = sqlite3.connect(DATABASE)
+    connection.row_factory = sqlite3.Row
+    cur = connection.cursor()
+
+    # Get Articles
+    result = cur.execute("SELECT * FROM articles")
+
+    articles = result.fetchall()
+
+    if articles != None:
+        return render_template('articles.html', articles=articles)
+    else:
+        msg = 'No Articles Found.'
+        return render_template('articles.html', msg=msg)
+
+    # Close Connection
+    cur.close()
 
 # Single Article
-@app.route('/article/<string:id>/')
-def article(id):
-    return render_template('article.html', id = id)
+@app.route('/article/<string:record>/')
+def article(record):
+    # Create Cursor
+    connection = sqlite3.connect(DATABASE)
+    connection.row_factory = sqlite3.Row
+    cur = connection.cursor()
+
+    # Get Articles
+    result = cur.execute("SELECT * FROM articles WHERE record=?", (record))
+
+    article = result.fetchone()
+
+    return render_template('article.html', article=article)
+
+    # Close Connection
+    cur.close()
 
 # Register Form Class
 class RegisterForm(Form):
@@ -51,20 +82,25 @@ class RegisterForm(Form):
 def register():
     form = RegisterForm(request.form)
     if request.method == 'POST' and form.validate():
-        record = None # Can leave this field out of database. Rowid autoassigned
+        #record = None  # Leave out and autoincrement db field
         name = form.name.data
         email = form.email.data
         username = form.username.data
         password = sha256_crypt.encrypt(str(form.password.data))
-        register_date = datetime.datetime.now()
-        #register_date = None
+        #register_date = datetime.datetime.now() # Use CURRENT_TIMESTAMP instead
 
         #Create Connection & Cursor
         connection = sqlite3.connect(DATABASE)
         cur = connection.cursor()
 
-        cur.execute('INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)', (record, name, username, email, password, register_date))
+        #cur.execute('INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)', (record, name, username, email, password, register_date))
+
+        cur.execute('INSERT INTO users(name, email, username, password) VALUES(?, ?, ?, ?)', (name, email, username, password))
+
+        # Commit
         connection.commit()
+
+        # Close Connection
         connection.close()
 
         flash('You are now registered and can log in.', 'success')
@@ -131,6 +167,7 @@ def is_logged_in(f):
 
 # Logout
 @app.route('/logout')
+@is_logged_in
 def logout():
     session.clear()
     flash('You are now logged out.', 'success')
@@ -141,7 +178,61 @@ def logout():
 @app.route('/dashboard')
 @is_logged_in
 def dashboard():
-    return render_template('dashboard.html')
+
+    # Create Cursor
+    connection = sqlite3.connect(DATABASE)
+    connection.row_factory = sqlite3.Row
+    cur = connection.cursor()
+
+    # Get Articles
+    result = cur.execute("SELECT * FROM articles")
+
+    articles = result.fetchall()
+
+    if articles != None:
+        return render_template('dashboard.html', articles=articles)
+    else:
+        msg = 'No Articles Found.'
+        return render_template('dashboard.html', msg=msg)
+
+    # Close Connection
+    cur.close()
+
+# Article Form Class
+class ArticleForm(Form):
+    title = StringField('Title', [validators.Length(min=1, max=200)])
+    body = TextAreaField('Body', [validators.Length(min=30)])
+
+# Add Article
+@app.route('/add_article', methods=['GET', 'POST'])
+@is_logged_in
+def add_article():
+    form = ArticleForm(request.form)
+    if request.method == 'POST' and form.validate():
+        #record = None # Use autoincrement instead
+        title = form.title.data
+        body = form.body.data
+        #create_date = datetime.datetime.now() # Use CURRENT_TIMESTAMP instead
+
+        # Create cursor
+        connection = sqlite3.connect(DATABASE)
+        connection.row_factory = sqlite3.Row
+        cur = connection.cursor()
+
+        # Execute
+        cur.execute('INSERT INTO articles(title, body, author) VALUES(?, ?, ?)', (title, body, session['username']))
+
+        # Commit to DB
+        connection.commit()
+
+        # Close Connection
+        connection.close()
+
+        flash('Article Created', 'success')
+
+        return redirect(url_for('dashboard'))
+
+    return render_template('add_article.html', form=form)
 
 
 if __name__ == '__main__':
