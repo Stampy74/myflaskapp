@@ -185,7 +185,7 @@ def dashboard():
     cur = connection.cursor()
 
     # Get Articles
-    result = cur.execute("SELECT * FROM articles")
+    result = cur.execute("SELECT * FROM articles WHERE author = ?", (session['username'],))
 
     articles = result.fetchall()
 
@@ -233,6 +233,79 @@ def add_article():
         return redirect(url_for('dashboard'))
 
     return render_template('add_article.html', form=form)
+
+# Edit Article
+@app.route('/edit_article/<string:record>', methods=['GET', 'POST'])
+@is_logged_in
+def edit_article(record):
+    # Fill the Form
+    # Create cursor
+    connection = sqlite3.connect(DATABASE)
+    connection.row_factory = sqlite3.Row
+    cur = connection.cursor()
+
+    # Get Article by Record
+    cur.execute('SELECT * FROM articles WHERE record = ?', (record))
+
+    article = cur.fetchone()
+
+    # Get the form
+    form = ArticleForm(request.form)
+
+    #Populate article form fields
+    form.title.data = article['title']
+    form.body.data = article['body']
+
+
+    if request.method == 'POST' and form.validate():
+        #record = None # Use autoincrement to populate instead
+        title = request.form['title']
+        body = request.form['body']
+        #create_date = datetime.datetime.now() # Use CURRENT_TIMESTAMP instead
+
+        # Create cursor
+        #connection = sqlite3.connect(DATABASE)
+        #connection.row_factory = sqlite3.Row
+        cur = connection.cursor()
+
+        # Execute
+        cur.execute('UPDATE articles SET title=?, body=? WHERE record=?', (title, body, record))
+
+        # Commit to DB
+        connection.commit()
+
+        # Close Connection
+        connection.close()
+
+        flash('Article Updated', 'success')
+
+        return redirect(url_for('dashboard'))
+
+    return render_template('edit_article.html', form=form)
+
+# Delete Article
+@app.route('/delete_article/<string:record>', methods=['POST'])
+@is_logged_in
+def delete_article(record):
+
+    # Create Cursor
+
+    connection = sqlite3.connect(DATABASE)
+    connection.row_factory = sqlite3.Row
+    cur = connection.cursor()
+
+    # Execute
+    cur.execute('DELETE FROM articles WHERE record=?', (record))
+
+    # Commit to DB
+    connection.commit()
+
+    # Close Connection
+    connection.close()
+
+    flash('Article Deleted', 'success')
+
+    return redirect(url_for('dashboard'))
 
 
 if __name__ == '__main__':
